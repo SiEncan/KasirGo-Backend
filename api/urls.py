@@ -2,8 +2,8 @@ from django.urls import path
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from .views import get_all_users, get_update_delete_user, create_user, change_password, create_category, \
                    get_all_categories, get_update_delete_category, create_product, get_all_products, \
-                   get_update_delete_product, create_transaction, get_all_transactions, get_update_delete_transaction, \
-                   LogoutView
+                   get_update_delete_product, create_transaction, get_update_delete_transaction, \
+                   list_transactions, LogoutView
 
 urlpatterns = [
 
@@ -24,7 +24,7 @@ urlpatterns = [
   path('product/create/', create_product, name='create_product'),
 
   # Transaction endpoints
-  path('transaction/', get_all_transactions, name='get_all_transactions'),
+  path('transaction/', list_transactions, name='list_transactions'),
   path('transaction/<int:transaction_id>/', get_update_delete_transaction, name='get_update_delete_transaction'),
   path('transaction/create/', create_transaction, name='create_transaction'),
 

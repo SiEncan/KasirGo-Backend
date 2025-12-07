@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from .models import Category, Product, Transaction, TransactionItem, User
+from decimal import Decimal
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
@@ -44,21 +45,9 @@ class TransactionSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         items_data = validated_data.pop('items')
         cashier = self.context['request'].user
-        # transaction = Transaction.objects.create(**validated_data)
-        
+
         transaction_subtotal = 0
-        for item_data in items_data:
-            product = Product.objects.get(id=item_data['product'].id)
-            quantity = item_data.get('quantity', 1)
-            price = product.price
-            transaction_subtotal += price * quantity
-
-        validated_data['subtotal'] = transaction_subtotal
-        validated_data['total'] = transaction_subtotal + validated_data.get('tax', 0) - validated_data.get('discount', 0)
-        change = validated_data['paid_amount'] - validated_data['total']
-        validated_data['change_amount'] = change if change > 0 else 0
-
-        transaction = Transaction.objects.create(cashier=cashier,**validated_data)
+        transaction = Transaction.objects.create(cashier=cashier, **validated_data)
 
         for item_data in items_data:
             product = Product.objects.get(id=item_data['product'].id)
@@ -66,6 +55,10 @@ class TransactionSerializer(serializers.ModelSerializer):
             price = product.price
             subtotal = price * quantity
 
+            # Update subtotal
+            transaction_subtotal += subtotal
+
+            # Buat TransactionItem
             TransactionItem.objects.create(
                 transaction=transaction,
                 product=product,
@@ -79,8 +72,23 @@ class TransactionSerializer(serializers.ModelSerializer):
             # Update stock
             product.stock -= quantity
             product.save()
-        
+
+        # Hitung tax (misal 11% PPN) dan total
+        tax_percentage = validated_data.get('tax_percentage', Decimal('0.11'))
+        tax = transaction_subtotal * tax_percentage
+        total = transaction_subtotal + tax - validated_data.get('discount', Decimal('0.00'))
+        change_amount = validated_data['paid_amount'] - total
+        change_amount = change_amount if change_amount > 0 else 0
+
+        # Update transaction dengan subtotal, tax, total, change
+        transaction.subtotal = transaction_subtotal
+        transaction.tax = tax
+        transaction.total = total
+        transaction.change_amount = change_amount
+        transaction.save()
+
         return transaction
+
     
     def update(self, instance, validated_data):
         items_data = validated_data.pop('items', None)

@@ -619,16 +619,6 @@ def create_transaction(request):
         'errors': serializer.errors
     }, status=status.HTTP_400_BAD_REQUEST)
 
-@api_view(['GET'])
-def get_all_transactions(request):
-    """
-    Mendapatkan semua transaksi
-    GET /api/transaction/
-    """
-    transactions = Transaction.objects.all()
-    serializer = TransactionSerializer(transactions, many=True)
-    return Response(serializer.data)
-
 @api_view(['GET', 'PATCH', 'DELETE'])
 def get_update_delete_transaction(request, transaction_id):
     """
@@ -671,37 +661,112 @@ def get_update_delete_transaction(request, transaction_id):
       return Response({
         'message': 'Transaksi berhasil dihapus',
       }, status=status.HTTP_200_OK)
+    
+@api_view(['GET'])
+def list_transactions(request):
+    """
+    Mendapatkan daftar transaksi dengan filter tanggal dan pagination
+    GET /api/transaction/?start_date=2025-12-01&end_date=2025-12-07&page=2&page_size=10
+    """
+    transactions = Transaction.objects.all()
 
-    # transaction = Transaction.objects.get(id=transaction_id)
-    # serializer = TransactionSerializer(transaction)
-    # return Response(serializer.data)
+    page = int(request.GET.get('page', 1))
+    page_size = int(request.GET.get('page_size', 10))
+    start = (page - 1) * page_size
+    end = start + page_size
 
+    # filter by date
+    start_date = request.GET.get('start_date')
+    end_date = request.GET.get('end_date')
+    if start_date:
+        transactions = transactions.filter(created_at__date__gte=start_date)
+    if end_date:
+        transactions = transactions.filter(created_at__date__lte=end_date)
 
-  # serializer = UserSerializer(data=request.data)
+    # slicing di QuerySet LIMIT + OFFSET
+    transactions_page = transactions[start:end]
+    total_page = transactions.count()
 
-  # if serializer.is_valid():
-  #   serializer.save()
-  #   return Response(serializer.data, status=status.HTTP_201_CREATED)
-  # return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    serializer = TransactionSerializer(transactions_page, many=True)
 
-# @api_view(['GET', 'PUT', 'DELETE'])
-# def user_detail(request, pk):
-#   try:
-#     user = User.objects.get(pk=pk)
-#   except User.DoesNotExist:
-#     return Response(status=status.HTTP_404_NOT_FOUND)
+    return Response({
+        'message': 'Success',
+        'total_page': total_page,
+        'page': page,
+        'page_size': page_size,
+        'data': serializer.data
+    })
 
-#   if request.method == 'GET':
-#     serializer = UserSerializer(user)
-#     return Response(serializer.data)
+    ##################### MANUAL SQL QUERY ####################################################################
 
-#   elif request.method == 'PUT':
-#     serializer = UserSerializer(user, data=request.data)
-#     if serializer.is_valid():
-#       serializer.save()
-#       return Response(serializer.data)
-#     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    # start_date = request.GET.get('start_date')
+    # end_date = request.GET.get('end_date')
+    # page = int(request.GET.get('page', 1))
+    # page_size = int(request.GET.get('page_size', 10))
+    # offset = (page - 1) * page_size
 
-#   elif request.method == 'DELETE':
-#     user.delete()
-#     return Response(status=status.HTTP_204_NO_CONTENT)
+    # where_clauses = []
+    # params = []
+
+    # if start_date and end_date:
+    #     # Filter date range
+    #     where_clauses.append("created_at BETWEEN %s AND %s")
+    #     params.extend([f'{start_date} 00:00:00', f'{end_date} 23:59:59'])
+
+    # where_sql = " AND ".join(where_clauses)
+    # if where_sql:
+    #     where_sql = "WHERE " + where_sql
+
+    # # Total count
+    # count_query = f"SELECT COUNT(*) FROM transaction {where_sql}"
+    # with connection.cursor() as cursor:
+    #     cursor.execute(count_query, params)
+    #     total_items = cursor.fetchone()[0]
+
+    # # Ambil transaksi page ini
+    # data_query = f"""
+    #     SELECT * FROM transaction
+    #     {where_sql}
+    #     ORDER BY created_at DESC
+    #     LIMIT %s OFFSET %s
+    # """
+    # with connection.cursor() as cursor:
+    #     cursor.execute(data_query, params + [page_size, offset])
+    #     columns = [col[0] for col in cursor.description]
+    #     transactions = [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+    # # Ambil transaction_item untuk setiap transaksi
+    # transaction_ids = [t['id'] for t in transactions]
+    # if transaction_ids:
+    #     format_ids = ','.join(['%s'] * len(transaction_ids))
+    #     item_query = f"""
+    #         SELECT * FROM transaction_item
+    #         WHERE transaction_id IN ({format_ids})
+    #     """
+    #     with connection.cursor() as cursor:
+    #         cursor.execute(item_query, transaction_ids)
+    #         item_columns = [col[0] for col in cursor.description]
+    #         items = [dict(zip(item_columns, row)) for row in cursor.fetchall()]
+
+    #     # Group items per transaction
+    #     items_by_transaction = {}
+    #     for item in items:
+    #         tid = item['transaction_id']
+    #         if tid not in items_by_transaction:
+    #             items_by_transaction[tid] = []
+    #         items_by_transaction[tid].append(item)
+
+    #     # Attach items ke transaksi
+    #     for t in transactions:
+    #         t['items'] = items_by_transaction.get(t['id'], [])
+    # else:
+    #     for t in transactions:
+    #         t['items'] = []
+
+    # return Response({
+    #     'message': 'Success',
+    #     'total_items': total_items,
+    #     'page': page,
+    #     'page_size': page_size,
+    #     'data': transactions
+    # })
