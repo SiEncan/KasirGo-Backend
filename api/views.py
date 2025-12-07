@@ -1,16 +1,24 @@
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny
 from rest_framework import status
 from .models import User, Product, Transaction
-from .serializer import UserSerializer, CreateUserSerializer, CategorySerializer, ProductSerializer \
-  , TransactionSerializer
+from .serializer import UserSerializer, CreateUserSerializer, CategorySerializer, ProductSerializer, \
+  TransactionSerializer
 from django.db import connection, transaction
 from django.contrib.auth.hashers import make_password, check_password
 import uuid
 
 @api_view(['GET'])
 def get_all_users(request):
+  """
+  Mendapatkan semua user
+  GET /api/users/
+  """
+  if request.user.role != 'admin':
+    return Response({
+      'message': 'Anda tidak memiliki izin untuk mengakses data ini'
+    }, status=status.HTTP_403_FORBIDDEN)
 
   with connection.cursor() as cursor:
     cursor.execute("SELECT id, username, email, first_name, last_name, role, phone, is_active, date_joined, last_login FROM users \
@@ -24,7 +32,21 @@ def get_all_users(request):
 
 @api_view(['POST'])
 @transaction.atomic
+@permission_classes([AllowAny])
 def create_user(request):
+  """
+  Membuat user baru
+  POST /api/users/create/
+  Body: {
+    "first_name": "John",
+    "last_name": "Doe",
+    "username": "johndoe",
+    "email": "johndoe@example.com",
+    "role": "cashier",
+    "phone": "08123456789",
+    "password": "password123"
+  }
+  """
   serializer = CreateUserSerializer(data=request.data)
   serializer.is_valid(raise_exception=True)
   data = serializer.validated_data
@@ -85,6 +107,12 @@ def change_password(request, user_id):
       "new_password": "newpassword456"
     }
     """
+
+    if user_id != request.user.id and not request.user.role == 'admin':
+      return Response({
+        'message': 'Anda tidak memiliki izin untuk mengakses data ini'
+      }, status=status.HTTP_403_FORBIDDEN)
+
     old_password = request.data.get('old_password')
     new_password = request.data.get('new_password')
     
@@ -135,6 +163,12 @@ def change_password(request, user_id):
 
 @api_view(['GET', 'PATCH', 'DELETE'])
 def get_user_by_id(request, user_id):
+
+  if user_id != request.user.id and not request.user.role == 'admin':
+    return Response({
+      'message': 'Anda tidak memiliki izin untuk mengakses data ini'
+    }, status=status.HTTP_403_FORBIDDEN)
+  
   if request.method == 'GET':
 
     with connection.cursor() as cursor:
@@ -406,7 +440,6 @@ def get_product_by_id(request, product_id):
   return Response({'message:': 'Success', 'data': result}, status=status.HTTP_200_OK)
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
 @transaction.atomic  # Rollback kalau error
 def create_transaction(request):
     """
@@ -437,7 +470,7 @@ def create_transaction(request):
           "quantity": 1,
           "price": 25000,
           "subtotal": 25000,
-          "notes": ""
+          "notes": "ga pedes"
         }
       ]
     }
@@ -456,24 +489,6 @@ def create_transaction(request):
         'errors': serializer.errors
     }, status=status.HTTP_400_BAD_REQUEST)
 
-# {'payment_method': 'cash', 
-#  'paid_amount': 100000, 
-#  'subtotal': 463534, 
-#  'tax': 7000, 
-#  'discount': 0, 
-#  'total': 9700, 
-#  'change_amount': 23000, 
-#  'notes': 'Catatan opsional', 
-#  'items': [
-#    {'product': 15, 
-#     'product_name': 'Kopi BABC', 
-#     'quantity': 2, 
-#     'price': 1500, 
-#     'subtotal': 2321, 
-#     'notes': 'Tanpa gula'}, 
-#     ], 
-#     'cashier_id': UUID('5864315e-dc55-4502-9012-da4d9b72011b')}
-
 @api_view(['GET'])
 def get_all_transactions(request):
     """
@@ -485,7 +500,7 @@ def get_all_transactions(request):
     return Response(serializer.data)
 
 @api_view(['GET'])
-def get_transaction(request, transaction_id):
+def get_transaction_by_id(request, transaction_id):
     """
     Mendapatkan detail transaksi berdasarkan ID
     GET /api/transaction/<transaction_id>/
