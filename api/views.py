@@ -450,40 +450,41 @@ def create_product(request):
   """
   serializer = ProductSerializer(data=request.data)
   serializer.is_valid(raise_exception=True)
-  data = serializer.validated_data
+  product = serializer.save()
+  # data = serializer.validated_data
 
-  name = data.get('name')
-  description = data.get('description', '')
-  price = data.get('price')
-  cost = data.get('cost', 0)
-  stock = data.get('stock', 0)
-  category = data.get('category')
-  image = data.get('image', '')
-  is_available = data.get('is_available', True)
-  sku = data.get('sku', '')
+  # name = data.get('name')
+  # description = data.get('description', '')
+  # price = data.get('price')
+  # cost = data.get('cost', 0)
+  # stock = data.get('stock', 0)
+  # category = data.get('category')
+  # image = data.get('image', '')
+  # is_available = data.get('is_available', True)
+  # sku = data.get('sku', '')
 
   # Ambil ID dari Category object
-  category_id = category.id if category else None
+  # category_id = category.id if category else None
   
-  with connection.cursor() as cursor:
-    cursor.execute("""
-      INSERT INTO product (
-        name, description, price, cost, stock, 
-        category_id, image, is_available, sku, 
-        created_at, updated_at
-      )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
-        RETURNING id, name, description, price, cost, stock, 
-        category_id, image, is_available, sku, created_at
-      """, [name, description, price, cost, stock, 
-      category_id, image, is_available, sku])
+  # with connection.cursor() as cursor:
+  #   cursor.execute("""
+  #     INSERT INTO product (
+  #       name, description, price, cost, stock, 
+  #       category_id, image, is_available, sku, 
+  #       created_at, updated_at
+  #     )
+  #       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+  #       RETURNING id, name, description, price, cost, stock, 
+  #       category_id, image, is_available, sku, created_at
+  #     """, [name, description, price, cost, stock, 
+  #     category_id, image, is_available, sku])
     
-    columns = [col[0] for col in cursor.description]
-    product_data = dict(zip(columns, cursor.fetchone()))
+  #   columns = [col[0] for col in cursor.description]
+  #   product_data = dict(zip(columns, cursor.fetchone()))
 
   return Response({
     'message': 'Produk berhasil dibuat',
-    'data': product_data
+    'data': ProductSerializer(product).data
   }, status=status.HTTP_201_CREATED)
 
 # ################################           RAW QUERY                #########################################################################
@@ -576,7 +577,7 @@ def search_products(request):
 def get_all_products(request):
   """
   Mendapatkan semua produk
-  GET /api/product/
+  GET /api/products/
   """
 
   products = Product.objects.all()

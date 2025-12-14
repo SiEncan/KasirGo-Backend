@@ -14,12 +14,12 @@ urlpatterns = [
   path('users/create/', create_user, name='create_user'),
 
   # Category endpoints
-  path('category/', get_all_categories, name='get_all_categories'),
+  path('categories/', get_all_categories, name='get_all_categories'),
   path('category/<int:category_id>/', get_update_delete_category, name='get_update_delete_category'),
   path('category/create/', create_category, name='create_category'),
 
   # Product endpoints
-  path('product/', get_all_products, name='get_all_products'),
+  path('products/', get_all_products, name='get_all_products'),
   path('products/search/', search_products, name='search_products'),
   path('product/<int:product_id>/', get_update_delete_product, name='get_update_delete_product'),
   path('product/create/', create_product, name='create_product'),
