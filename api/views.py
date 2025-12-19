@@ -7,8 +7,8 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
 
-from .models import User, Product, Transaction
-from .serializer import UserSerializer, CreateUserSerializer, CategorySerializer, ProductSerializer, \
+from .models import Product, Transaction
+from .serializer import CreateUserSerializer, CategorySerializer, ProductSerializer, \
   TransactionSerializer
 from django.db import connection, transaction
 from django.db.models import Q
@@ -34,10 +34,10 @@ class LogoutView(APIView):
       token_user_id = str(token_obj['user_id'])  # user_id di token
 
       if token_user_id != str(request.user.id):
-        return Response({"error": "Tidak bisa logout token user lain"}, status=403)
+        return Response({"error": "Cannot logout token of another user"}, status=403)
 
       token_obj.blacklist()  # invalidate token
-      return Response({"message": "Logout berhasil"}, status=status.HTTP_205_RESET_CONTENT)
+      return Response({"message": "Logout successful"}, status=status.HTTP_205_RESET_CONTENT)
     except (TokenError, InvalidToken) as e:
       return Response({"error": "Invalid token"}, status=status.HTTP_400_BAD_REQUEST)
       
@@ -97,14 +97,14 @@ def create_user(request):
     cursor.execute('SELECT id FROM users WHERE username = %s', [username])
     if cursor.fetchone():
         return Response({
-            'message': 'Username sudah digunakan'
+            'message': 'Username is already in use'
         }, status=status.HTTP_400_BAD_REQUEST)
     
     # Cek email sudah ada atau belum
     cursor.execute('SELECT id FROM users WHERE email = %s', [email])
     if cursor.fetchone():
         return Response({
-            'message': 'Email sudah digunakan'
+            'message': 'Email is already in use'
         }, status=status.HTTP_400_BAD_REQUEST)
     
     # hash password
@@ -142,7 +142,7 @@ def change_password(request, user_id):
 
     if user_id != request.user.id and not request.user.role == 'admin':
       return Response({
-        'message': 'Anda tidak memiliki izin untuk mengakses data ini'
+        'message': 'You do not have permission to access this data'
       }, status=status.HTTP_403_FORBIDDEN)
 
     old_password = request.data.get('old_password')
@@ -151,12 +151,12 @@ def change_password(request, user_id):
     # Validasi
     if not old_password or not new_password:
       return Response({
-        'message': 'Password lama dan baru wajib diisi'
+        'message': 'Old password and new password are required'
       }, status=status.HTTP_400_BAD_REQUEST)
     
     if len(new_password) < 8:
       return Response({
-        'message': 'Password minimal 8 karakter'
+        'message': 'Password must be at least 8 characters long'
       }, status=status.HTTP_400_BAD_REQUEST)
     
     with connection.cursor() as cursor:
@@ -170,13 +170,13 @@ def change_password(request, user_id):
       
       if not db_old_password:
         return Response({
-          'message': 'User tidak ditemukan'
+          'message': 'User not found'
         }, status=status.HTTP_404_NOT_FOUND)
       
       # Verifikasi password lama
       if not check_password(old_password, db_old_password):
         return Response({
-          'message': 'Password lama salah'
+          'message': 'Old Password does not match'
         }, status=status.HTTP_400_BAD_REQUEST)
       
       # Hash password baru
@@ -203,7 +203,7 @@ def get_update_delete_user(request, user_id):
   """
   if user_id != request.user.id and not request.user.role == 'admin':
     return Response({
-      'message': 'Anda tidak memiliki izin untuk mengakses data ini'
+      'message': 'You do not have permission to access this data'
     }, status=status.HTTP_403_FORBIDDEN)
   
   if request.method == 'GET':
@@ -260,7 +260,7 @@ def get_update_delete_user(request, user_id):
 
     if len(params) == 0:
       return Response({
-        'message': 'Tidak ada data yang diupdate'
+        'message': 'No data to update'
       }, status=status.HTTP_400_BAD_REQUEST)
     
     params.append(user_id)
@@ -276,7 +276,7 @@ def get_update_delete_user(request, user_id):
       cursor.execute("SELECT id FROM users WHERE id = %s", [user_id])
       if not cursor.fetchone():
         return Response({
-          'message': 'User tidak ditemukan'
+          'message': 'User not found'
         }, status = status.HTTP_404_NOT_FOUND)
       
       cursor.execute(sql, params)
@@ -285,7 +285,7 @@ def get_update_delete_user(request, user_id):
       user_data = dict(zip(columns, cursor.fetchone()))
 
     return Response({
-        'message': 'User berhasil diupdate',
+        'message': 'User has been updated',
         'data': user_data
     }, status=status.HTTP_200_OK)
   
@@ -294,13 +294,13 @@ def get_update_delete_user(request, user_id):
       cursor.execute(f"SELECT id FROM users WHERE id = {user_id}")
       if not cursor.fetchone():
         return Response({
-          'message': 'User tidak ditemukan'
+          'message': 'User not found'
         }, status = status.HTTP_404_NOT_FOUND)
       
       cursor.execute(f"DELETE FROM users WHERE id = {user_id}")
     
     return Response({
-      'message': 'User berhasil dihapus'
+      'message': 'User has been deleted'
     }, status=status.HTTP_200_OK)
   
 
@@ -362,7 +362,7 @@ def get_update_delete_category(request, category_id):
       
       if len(params) == 0:
         return Response({
-          'message': 'Tidak ada data yang diupdate'
+          'message': 'No data to update'
         }, status=status.HTTP_400_BAD_REQUEST)
       
       params.append(category_id)
@@ -379,7 +379,7 @@ def get_update_delete_category(request, category_id):
       category_data = dict(zip(columns, cursor.fetchone()))
 
     return Response({
-        'message': 'Kategori produk berhasil diupdate',
+        'message': 'Category has been updated',
         'data': category_data
     }, status=status.HTTP_200_OK)
 
@@ -394,7 +394,7 @@ def get_update_delete_category(request, category_id):
       cursor.execute("DELETE FROM category WHERE id = %s", [category_id])
     
     return Response({
-      'message': 'Kategori produk berhasil dihapus'
+      'message': 'Category has been deleted'
     }, status=status.HTTP_200_OK)
 
 @api_view(['POST'])
@@ -426,7 +426,7 @@ def create_category(request):
     category_data = dict(zip(columns, cursor.fetchone()))
   
   return Response({
-    'message': 'Kategori produk berhasil dibuat',
+    'message': 'Category has been created',
     'data': category_data
   }, status=status.HTTP_201_CREATED)
 
@@ -483,7 +483,7 @@ def create_product(request):
   #   product_data = dict(zip(columns, cursor.fetchone()))
 
   return Response({
-    'message': 'Produk berhasil dibuat',
+    'message': 'Product has been created',
     'data': ProductSerializer(product).data
   }, status=status.HTTP_201_CREATED)
 
@@ -640,7 +640,7 @@ def get_update_delete_product(request, product_id):
     serializer.save()
 
     return Response({
-      'message': 'Produk berhasil diupdate',
+      'message': 'Product has been updated',
       'data': serializer.data
     }, status=status.HTTP_200_OK)
   
@@ -653,7 +653,7 @@ def get_update_delete_product(request, product_id):
     product.delete()
 
     return Response({
-      'message': 'Produk berhasil dihapus'
+      'message': 'Product has been deleted'
     }, status=status.HTTP_200_OK)
 
 @api_view(['POST'])
@@ -697,12 +697,12 @@ def create_transaction(request):
         transaction = serializer.save()
         
         return Response({
-            'message': 'Transaksi berhasil dibuat',
+            'message': 'Transaction has been created',
             'data': TransactionSerializer(transaction).data
         }, status=status.HTTP_201_CREATED)
     
     return Response({
-        'message': 'Gagal membuat transaksi',
+        'message': 'Failed to create transaction',
         'errors': serializer.errors
     }, status=status.HTTP_400_BAD_REQUEST)
 
@@ -733,7 +733,7 @@ def get_update_delete_transaction(request, transaction_id):
       serializer.save()
 
       return Response({
-        'message': 'Transaksi berhasil diupdate',
+        'message': 'Transaction has been updated',
         'data': serializer.data
       }, status=status.HTTP_200_OK)
 
@@ -746,7 +746,7 @@ def get_update_delete_transaction(request, transaction_id):
       transaction.delete()
 
       return Response({
-        'message': 'Transaksi berhasil dihapus',
+        'message': 'Transaction has been deleted',
       }, status=status.HTTP_200_OK)
     
 @api_view(['GET'])
