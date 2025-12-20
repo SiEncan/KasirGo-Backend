@@ -664,6 +664,8 @@ def create_transaction(request):
     POST /api/transactions/
     
     Body: {
+      "customer_name": "John Doe",
+      "order_type": "dine_in",  // atau "take_away"
       "payment_method": "cash",
       "paid_amount": 100000,
       "subtotal": 70000,

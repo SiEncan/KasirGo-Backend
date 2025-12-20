@@ -77,9 +77,7 @@ class Transaction(models.Model):
     """Transaksi penjualan"""
     PAYMENT_METHOD_CHOICES = [
         ('cash', 'Cash'),
-        ('card', 'Debit/Credit Card'),
         ('qris', 'QRIS'),
-        ('ewallet', 'E-Wallet'),
     ]
 
     STATUS_CHOICES = [
@@ -88,8 +86,15 @@ class Transaction(models.Model):
         ('cancelled', 'Cancelled'),
     ]
 
+    ORDER_TYPE_CHOICES = [
+        ('dine_in', 'Dine In'),
+        ('take_away', 'Take Away'),
+    ]
+
     transaction_number = models.CharField(max_length=50, unique=True, editable=False)
     cashier = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='transactions')
+    customer_name = models.CharField(max_length=100, blank=True, null=True)
+    order_type = models.CharField(max_length=20, choices=ORDER_TYPE_CHOICES, default='dine_in')
     
     subtotal = models.DecimalField(max_digits=10, decimal_places=2)
     tax = models.DecimalField(max_digits=10, decimal_places=2, default=0)
@@ -100,7 +105,7 @@ class Transaction(models.Model):
     paid_amount = models.DecimalField(max_digits=10, decimal_places=2)
     change_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='completed')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     notes = models.TextField(blank=True, null=True)
     
     created_at = models.DateTimeField(auto_now_add=True)

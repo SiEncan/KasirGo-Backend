@@ -37,6 +37,8 @@ class TransactionItemSerializer(serializers.ModelSerializer):
 class TransactionSerializer(serializers.ModelSerializer):
     items = TransactionItemSerializer(many=True)
     cashier_name = serializers.CharField(source='cashier.username', read_only=True)
+    customer_name = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    order_type = serializers.ChoiceField(choices=Transaction.ORDER_TYPE_CHOICES, default='dine_in')
     
     class Meta:
         model = Transaction
