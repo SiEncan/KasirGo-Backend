@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Category, Product, Transaction, TransactionItem, User
+from .models import Category, Product, Transaction, TransactionItem, User, Payment
 from decimal import Decimal
 
 class UserSerializer(serializers.ModelSerializer):
@@ -135,3 +135,19 @@ class TransactionSerializer(serializers.ModelSerializer):
         
         instance.save()
         return instance
+
+
+class PaymentSerializer(serializers.ModelSerializer):
+    transaction_number = serializers.CharField(source='transaction.transaction_number', read_only=True)
+    
+    class Meta:
+        model = Payment
+        fields = '__all__'
+        read_only_fields = ['merchant_order_id', 'reference', 'payment_url', 'va_number', 
+                          'qr_string', 'status', 'status_code', 'status_message', 
+                          'callback_data', 'expired_at', 'paid_at']
+
+
+class CreatePaymentSerializer(serializers.Serializer):
+    transaction_id = serializers.IntegerField()
+    payment_method = serializers.CharField(default='SP')  # SP = QRIS

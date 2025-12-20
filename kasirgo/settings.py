@@ -164,3 +164,10 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Duitku Payment Gateway Configuration
+DUITKU_MERCHANT_CODE = config('DUITKU_MERCHANT_CODE')
+DUITKU_API_KEY = config('DUITKU_API_KEY')
+DUITKU_IS_SANDBOX = config('DUITKU_IS_SANDBOX', cast=bool)
+DUITKU_CALLBACK_URL = config('DUITKU_CALLBACK_URL')
+DUITKU_RETURN_URL = config('DUITKU_RETURN_URL')

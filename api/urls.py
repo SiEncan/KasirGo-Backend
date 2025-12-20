@@ -3,7 +3,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from .views import get_all_users, get_update_delete_user, create_user, change_password, create_category, \
                    get_all_categories, get_update_delete_category, search_products, create_product, get_all_products, \
                    get_update_delete_product, create_transaction, get_update_delete_transaction, \
-                   list_transactions, LogoutView
+                   list_transactions, LogoutView, create_payment, payment_callback, get_payment_status
 
 urlpatterns = [
 
@@ -33,4 +33,9 @@ urlpatterns = [
   path('auth/login/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
   path('auth/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
   path('auth/logout/', LogoutView.as_view(), name='logout'),
+
+  # Payment endpoints (Duitku)
+  path('payment/create/', create_payment, name='create_payment'),
+  path('payment/callback/', payment_callback, name='payment_callback'),
+  path('payment/status/<int:payment_id>/', get_payment_status, name='get_payment_status'),
 ]

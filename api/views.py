@@ -7,13 +7,20 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
 
-from .models import Product, Transaction
+from .models import Product, Transaction, Payment
 from .serializer import CreateUserSerializer, CategorySerializer, ProductSerializer, \
-  TransactionSerializer
+  TransactionSerializer, PaymentSerializer, CreatePaymentSerializer
 from django.db import connection, transaction
 from django.db.models import Q
 from django.contrib.auth.hashers import make_password, check_password
+from django.conf import settings
+from django.utils import timezone
+from django.views.decorators.csrf import csrf_exempt
 import uuid
+import hashlib
+import requests
+import json
+from datetime import timedelta
 
 class LogoutView(APIView):
   """
@@ -859,3 +866,333 @@ def list_transactions(request):
     #     'page_size': page_size,
     #     'data': transactions
     # })
+
+
+# ==================== PAYMENT (DUITKU) ENDPOINTS ====================
+
+def get_duitku_signature(merchant_code, merchant_order_id, amount, api_key):
+    """Generate signature untuk Duitku API"""
+    signature_string = f"{merchant_code}{merchant_order_id}{amount}{api_key}"
+    return hashlib.md5(signature_string.encode()).hexdigest()
+
+
+@api_view(['POST'])
+@transaction.atomic
+def create_payment(request):
+    """
+    Membuat pembayaran baru via Duitku
+    POST /api/payment/create/
+    
+    Body: {
+        "transaction_id": 1,
+        "payment_method": "SP"  // SP = QRIS, VC = Credit Card, dll
+    }
+    
+    Payment Methods:
+    - SP = QRIS
+    - VC = Credit Card (Visa/Master)
+    - BC = BCA Virtual Account
+    - M2 = Mandiri Virtual Account
+    - VA = Maybank Virtual Account
+    - I1 = BNI Virtual Account
+    - B1 = CIMB Niaga Virtual Account
+    - BT = Permata Bank Virtual Account
+    - A1 = ATM Bersama
+    - OV = OVO
+    - SA = ShopeePay
+    - LQ = LinkAja
+    - DA = DANA
+    """
+    serializer = CreatePaymentSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    data = serializer.validated_data
+    
+    # Get transaction
+    try:
+        trx = Transaction.objects.get(id=data['transaction_id'])
+    except Transaction.DoesNotExist:
+        return Response({
+            'message': 'Transaction not found'
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    # Check if transaction already has successful payment
+    existing_payment = Payment.objects.filter(
+        transaction=trx, 
+        status='success'
+    ).first()
+    if existing_payment:
+        return Response({
+            'message': 'Transaction already paid',
+            'data': PaymentSerializer(existing_payment).data
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Duitku configuration
+    merchant_code = settings.DUITKU_MERCHANT_CODE
+    api_key = settings.DUITKU_API_KEY
+    is_sandbox = settings.DUITKU_IS_SANDBOX
+    callback_url = settings.DUITKU_CALLBACK_URL
+    return_url = settings.DUITKU_RETURN_URL
+    
+    if not merchant_code:
+        return Response({
+            'message': 'Duitku Merchant Code not configured'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    # Generate unique merchant order ID
+    merchant_order_id = f"PAY-{trx.transaction_number}-{timezone.now().strftime('%H%M%S')}"
+    amount = int(trx.total)  # Duitku requires integer amount
+    payment_method = data.get('payment_method', 'SP')
+    
+    # Generate signature
+    signature = get_duitku_signature(merchant_code, merchant_order_id, amount, api_key)
+    
+    # Prepare request to Duitku
+    base_url = "https://sandbox.duitku.com" if is_sandbox else "https://passport.duitku.com"
+    endpoint = f"{base_url}/webapi/api/merchant/v2/inquiry"
+    
+    # Customer info
+    customer_name = trx.customer_name or "Customer"
+    customer_email = "customer@kasirgo.com"  # Default email for POS
+    
+    payload = {
+        "merchantCode": merchant_code,
+        "paymentAmount": amount,
+        "paymentMethod": payment_method,
+        "merchantOrderId": merchant_order_id,
+        "productDetails": f"Pembayaran {trx.transaction_number}",
+        "customerVaName": customer_name,
+        "email": customer_email,
+        "phoneNumber": "08123456789",
+        "itemDetails": [
+            {
+                "name": f"Order {trx.transaction_number}",
+                "price": amount,
+                "quantity": 1
+            }
+        ],
+        "customerDetail": {
+            "firstName": customer_name,
+            "lastName": "",
+            "email": customer_email,
+            "phoneNumber": "08123456789"
+        },
+        "callbackUrl": callback_url,
+        "returnUrl": return_url,
+        "signature": signature,
+        "expiryPeriod": 60  # 60 minutes
+    }
+    
+    headers = {
+        "Content-Type": "application/json"
+    }
+    
+    try:
+        response = requests.post(endpoint, json=payload, headers=headers, timeout=30)
+        response_data = response.json()
+        
+        if response.status_code == 200 and response_data.get('statusCode') == '00':
+            # Success - create payment record
+            expired_at = timezone.now() + timedelta(minutes=60)
+            
+            payment = Payment.objects.create(
+                transaction=trx,
+                merchant_order_id=merchant_order_id,
+                reference=response_data.get('reference', ''),
+                payment_url=response_data.get('paymentUrl', ''),
+                va_number=response_data.get('vaNumber', ''),
+                qr_string=response_data.get('qrString', ''),
+                payment_method=payment_method,
+                amount=amount,
+                status='pending',
+                status_code=response_data.get('statusCode'),
+                status_message=response_data.get('statusMessage'),
+                expired_at=expired_at
+            )
+            
+            return Response({
+                'message': 'Payment created successfully',
+                'data': {
+                    'payment_id': payment.id,
+                    'merchant_order_id': merchant_order_id,
+                    'reference': response_data.get('reference'),
+                    'payment_url': response_data.get('paymentUrl'),
+                    'va_number': response_data.get('vaNumber'),
+                    'qr_string': response_data.get('qrString'),
+                    'amount': amount,
+                    'expired_at': expired_at.isoformat()
+                }
+            }, status=status.HTTP_201_CREATED)
+        else:
+            # Failed
+            return Response({
+                'message': 'Failed to create payment',
+                'error': response_data.get('statusMessage', 'Unknown error'),
+                'status_code': response_data.get('statusCode')
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+    except requests.exceptions.RequestException as e:
+        return Response({
+            'message': 'Failed to connect to payment gateway',
+            'error': str(e)
+        }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@csrf_exempt
+def payment_callback(request):
+    """
+    Webhook callback dari Duitku
+    POST /api/payment/callback/
+    
+    Duitku akan mengirim data:
+    - merchantCode
+    - amount
+    - merchantOrderId
+    - productDetail
+    - additionalParam
+    - paymentCode
+    - resultCode (00 = success)
+    - merchantUserId
+    - reference
+    - signature
+    - publisherOrderId
+    - spUserHash
+    - settlementDate
+    - issuerCode
+    """
+    try:
+        # Handle both JSON and form-urlencoded
+        if request.content_type == 'application/json':
+            callback_data = request.data
+        else:
+            callback_data = request.POST.dict()
+        
+        merchant_order_id = callback_data.get('merchantOrderId')
+        result_code = callback_data.get('resultCode')
+        amount = callback_data.get('amount')
+        signature = callback_data.get('signature')
+        reference = callback_data.get('reference')
+        
+        if not merchant_order_id:
+            return Response({
+                'message': 'Invalid callback data'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Verify signature
+        merchant_code = settings.DUITKU_MERCHANT_CODE
+        api_key = settings.DUITKU_API_KEY
+        expected_signature = hashlib.md5(
+            f"{merchant_code}{amount}{merchant_order_id}{api_key}".encode()
+        ).hexdigest()
+        
+        if signature != expected_signature:
+            return Response({
+                'message': 'Invalid signature'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        # Find payment
+        try:
+            payment = Payment.objects.get(merchant_order_id=merchant_order_id)
+        except Payment.DoesNotExist:
+            return Response({
+                'message': 'Payment not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Update payment status
+        payment.callback_data = callback_data
+        payment.reference = reference or payment.reference
+        
+        if result_code == '00':
+            payment.status = 'success'
+            payment.paid_at = timezone.now()
+            
+            # Update transaction status
+            payment.transaction.status = 'completed'
+            payment.transaction.save()
+        elif result_code == '01':
+            payment.status = 'pending'
+        else:
+            payment.status = 'failed'
+        
+        payment.status_code = result_code
+        payment.save()
+        
+        return Response({
+            'message': 'Callback processed successfully'
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            'message': 'Error processing callback',
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+def get_payment_status(request, payment_id):
+    """
+    Cek status pembayaran
+    GET /api/payment/status/<payment_id>/
+    
+    Response:
+    - payment details
+    - current status
+    - can also check real-time status from Duitku
+    """
+    try:
+        payment = Payment.objects.get(id=payment_id)
+    except Payment.DoesNotExist:
+        return Response({
+            'message': 'Payment not found'
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    # Check if should query Duitku for real-time status
+    check_realtime = request.GET.get('realtime', 'false').lower() == 'true'
+    
+    if check_realtime and payment.status == 'pending':
+        # Query Duitku for real-time status
+        merchant_code = settings.DUITKU_MERCHANT_CODE
+        api_key = settings.DUITKU_API_KEY
+        is_sandbox = settings.DUITKU_IS_SANDBOX
+        
+        signature = hashlib.md5(
+            f"{merchant_code}{payment.merchant_order_id}{api_key}".encode()
+        ).hexdigest()
+        
+        base_url = "https://sandbox.duitku.com" if is_sandbox else "https://passport.duitku.com"
+        endpoint = f"{base_url}/webapi/api/merchant/transactionStatus"
+        
+        payload = {
+            "merchantCode": merchant_code,
+            "merchantOrderId": payment.merchant_order_id,
+            "signature": signature
+        }
+        
+        try:
+            response = requests.post(endpoint, json=payload, timeout=30)
+            response_data = response.json()
+            
+            if response_data.get('statusCode') == '00':
+                payment.status = 'success'
+                payment.paid_at = timezone.now()
+                payment.transaction.status = 'completed'
+                payment.transaction.save()
+            elif response_data.get('statusCode') == '01':
+                payment.status = 'pending'
+            elif response_data.get('statusCode') == '02':
+                payment.status = 'cancelled'
+            else:
+                payment.status = 'expired'
+            
+            payment.status_code = response_data.get('statusCode')
+            payment.status_message = response_data.get('statusMessage')
+            payment.save()
+            
+        except requests.exceptions.RequestException:
+            pass  # Keep existing status if can't reach Duitku
+    
+    return Response({
+        'message': 'Success',
+        'data': PaymentSerializer(payment).data
+    }, status=status.HTTP_200_OK)

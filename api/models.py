@@ -157,3 +157,38 @@ class TransactionItem(models.Model):
     
     class Meta:
         db_table = "transaction_item"
+
+
+class Payment(models.Model):
+    """Payment record untuk integrasi Duitku"""
+    PAYMENT_STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('success', 'Success'),
+        ('failed', 'Failed'),
+        ('expired', 'Expired'),
+        ('cancelled', 'Cancelled'),
+    ]
+
+    transaction = models.ForeignKey(Transaction, on_delete=models.CASCADE, related_name='payments')
+    merchant_order_id = models.CharField(max_length=100, unique=True)  # Order ID untuk Duitku
+    reference = models.CharField(max_length=100, blank=True, null=True)  # Reference dari Duitku
+    payment_url = models.URLField(blank=True, null=True)  # URL pembayaran QRIS/VA
+    va_number = models.CharField(max_length=50, blank=True, null=True)  # Virtual Account number
+    qr_string = models.TextField(blank=True, null=True)  # QR String untuk QRIS
+    payment_method = models.CharField(max_length=20)  # SP (QRIS), VC (Visa), etc
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default='pending')
+    status_code = models.CharField(max_length=10, blank=True, null=True)  # Status code dari Duitku
+    status_message = models.TextField(blank=True, null=True)  # Message dari Duitku
+    callback_data = models.JSONField(blank=True, null=True)  # Raw callback data
+    expired_at = models.DateTimeField(blank=True, null=True)
+    paid_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "payment"
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.merchant_order_id} - {self.status}"
