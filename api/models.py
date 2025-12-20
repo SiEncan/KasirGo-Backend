@@ -77,6 +77,7 @@ class Transaction(models.Model):
     """Transaksi penjualan"""
     PAYMENT_METHOD_CHOICES = [
         ('cash', 'Cash'),
+        ('bca va', 'BCA VA'),
         ('qris', 'QRIS'),
     ]
 
