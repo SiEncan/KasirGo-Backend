@@ -31,7 +31,7 @@ ALLOWED_HOSTS = [
     'localhost',
     '10.0.2.2',
     '127.0.0.1',
-    '04aa7e92f23a.ngrok-free.app'
+    '393198a28cf6.ngrok-free.app'
 ]
 
 CORS_ALLOWED_ORIGINS = [

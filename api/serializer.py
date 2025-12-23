@@ -84,13 +84,15 @@ class TransactionSerializer(serializers.ModelSerializer):
         # Hitung tax (misal 11% PPN) dan total
         tax_percentage = validated_data.get('tax_percentage', Decimal('0.11'))
         tax = transaction_subtotal * tax_percentage
-        total = transaction_subtotal + tax - validated_data.get('discount', Decimal('0.00'))
+        takeaway_charge = validated_data.get('takeaway_charge', Decimal('0.00'))
+        total = transaction_subtotal + tax + takeaway_charge - validated_data.get('discount', Decimal('0.00'))
         change_amount = validated_data['paid_amount'] - total
         change_amount = change_amount if change_amount > 0 else 0
 
         # Update transaction dengan subtotal, tax, total, change
         transaction.subtotal = transaction_subtotal
         transaction.tax = tax
+        transaction.takeaway_charge = takeaway_charge
         transaction.total = total
         transaction.change_amount = change_amount
         transaction.save()
@@ -135,7 +137,7 @@ class TransactionSerializer(serializers.ModelSerializer):
                 product.save()
             
             instance.subtotal = transaction_subtotal
-            instance.total = transaction_subtotal + instance.tax - instance.discount
+            instance.total = transaction_subtotal + instance.tax + instance.takeaway_charge - instance.discount
             instance.change_amount = max(0, instance.paid_amount - instance.total)
         
         instance.save()

@@ -1018,8 +1018,7 @@ def create_payment(request):
     else:
       # Failed
       return Response({
-        'message': 'Failed to create payment',
-        'error': response_data.get('statusMessage', 'Unknown error'),
+        'message': response_data.get('Message', 'Unknown error'),
         'status_code': response_data.get('statusCode')
       }, status=status.HTTP_400_BAD_REQUEST)
           
