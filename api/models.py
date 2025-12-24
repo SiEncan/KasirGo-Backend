@@ -69,6 +69,15 @@ class Product(models.Model):
         db_table = "product"
         ordering = ['name']
 
+    def save(self, *args, **kwargs):
+        # Auto-update status based on stock
+        if self.stock <= 0:
+            self.is_available = False
+        else:
+            self.is_available = True
+            
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return self.name
 
