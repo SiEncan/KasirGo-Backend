@@ -798,6 +798,15 @@ def list_transactions(request):
         transactions = transactions.filter(created_at__date__gte=start_date)
     if end_date:
         transactions = transactions.filter(created_at__date__lte=end_date)
+        
+    # filter by search query
+    search_query = request.GET.get('search')
+    if search_query:
+        transactions = transactions.filter(
+            Q(transaction_number__icontains=search_query) |
+            Q(customer_name__icontains=search_query) |
+            Q(notes__icontains=search_query)
+        )
 
     # slicing di QuerySet LIMIT + OFFSET
     transactions_page = transactions[start:end]
