@@ -61,6 +61,7 @@ class Product(models.Model):
     stock = models.IntegerField(default=0)
     image = models.ImageField(upload_to='products/', blank=True, null=True)
     is_available = models.BooleanField(default=True)
+    needs_preparation = models.BooleanField(default=True) # True = Masuk KDS, False = Skip KDS (Grab & Go)
     sku = models.CharField(max_length=50, unique=True, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -92,6 +93,7 @@ class Transaction(models.Model):
 
     STATUS_CHOICES = [
         ('pending', 'Pending'),
+        ('processing', 'Processing'), # Paid & Being Prepared
         ('completed', 'Completed'),
         ('cancelled', 'Cancelled'),
     ]

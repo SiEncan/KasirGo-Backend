@@ -808,6 +808,15 @@ def list_transactions(request):
             Q(notes__icontains=search_query)
         )
 
+    # filter by status (supports comma-separated values, e.g., 'pending,processing')
+    status_param = request.GET.get('status')
+    if status_param:
+        statuses = [s.strip() for s in status_param.split(',')]
+        if len(statuses) == 1:
+            transactions = transactions.filter(status=statuses[0])
+        else:
+            transactions = transactions.filter(status__in=statuses)
+
     # slicing di QuerySet LIMIT + OFFSET
     transactions_page = transactions[start:end]
     total_page = transactions.count()
