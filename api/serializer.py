@@ -12,7 +12,7 @@ class CreateUserSerializer(serializers.Serializer):
     last_name = serializers.CharField()
     username = serializers.CharField()
     email = serializers.EmailField()
-    role = serializers.CharField(default="cashier")
+    role = serializers.CharField(default="staff")
     phone = serializers.CharField(required=False, allow_blank=True)
     password = serializers.CharField()
 
@@ -20,6 +20,7 @@ class CategorySerializer(serializers.ModelSerializer):
   class Meta:
         model = Category
         fields = '__all__'
+        read_only_fields = ['cafe']
 
 class ProductSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source='category.name', read_only=True)
@@ -28,6 +29,7 @@ class ProductSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
         fields = '__all__'
+        read_only_fields = ['cafe']
 
 class TransactionItemSerializer(serializers.ModelSerializer):
     class Meta:
@@ -43,7 +45,7 @@ class TransactionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Transaction
         fields = '__all__'
-        read_only_fields = ['transaction_number', 'cashier']
+        read_only_fields = ['transaction_number', 'cashier', 'cafe']
     
     def get_cashier_name(self, obj):
         if obj.cashier:
@@ -52,13 +54,15 @@ class TransactionSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         items_data = validated_data.pop('items')
+        
         cashier = self.context['request'].user
+        cafe = cashier.cafe
 
         transaction_subtotal = 0
-        transaction = Transaction.objects.create(cashier=cashier, **validated_data)
+        transaction = Transaction.objects.create(cashier=cashier, cafe=cafe, **validated_data)
 
         for item_data in items_data:
-            product = Product.objects.get(id=item_data['product'].id)
+            product = Product.objects.get(id=item_data['product'].id, cafe=cafe)
             quantity = item_data.get('quantity', 1)
             price = product.price
             subtotal = price * quantity
@@ -118,7 +122,7 @@ class TransactionSerializer(serializers.ModelSerializer):
             # Tambahkan item baru & kurangi stock
             transaction_subtotal = 0
             for item_data in items_data:
-                product = Product.objects.get(id=item_data['product'].id)
+                product = Product.objects.get(id=item_data['product'].id, cafe=instance.cafe)
                 quantity = item_data.get('quantity', 1)
                 subtotal = product.price * quantity
                 transaction_subtotal += subtotal

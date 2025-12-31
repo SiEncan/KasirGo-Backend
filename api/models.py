@@ -1,28 +1,35 @@
 from django.db import models
 import uuid
-
-# Create your models here.
-# class User(models.Model):
-#   name = models.CharField(max_length=100)
-#   email = models.EmailField()
-#   password = models.CharField(max_length=100)
-
-#   def __str__(self):
-#     return self.name
-
 from django.contrib.auth.models import AbstractUser
 from django.utils import timezone
+
+
+class Cafe(models.Model):
+    """Entitas Bisnis / Tenant (Toko)"""
+    name = models.CharField(max_length=100)
+    address = models.TextField(blank=True, null=True)
+    phone = models.CharField(max_length=20, blank=True, null=True)
+    logo = models.ImageField(upload_to='cafe_logos/', blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.name
+    
+    class Meta:
+        db_table = "cafes"
 
 
 class User(AbstractUser):
     """Custom User untuk kasir/staff"""
     ROLE_CHOICES = [
-        ('admin', 'Admin'),
-        ('cashier', 'Kasir'),
-        ('manager', 'Manager'),
+        ('admin', 'Super Admin'),
+        ('owner', 'Owner'),
+        ('staff', 'Staff'),
     ]
     
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    cafe = models.ForeignKey(Cafe, on_delete=models.SET_NULL, null=True, blank=True, related_name='staff') # Link to Tenant
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='cashier')
     phone = models.CharField(max_length=20, blank=True, null=True)
     is_active = models.BooleanField(default=True)
@@ -37,6 +44,7 @@ class User(AbstractUser):
 
 class Category(models.Model):
     """Kategori produk: Minuman, Makanan, Snack, dll"""
+    cafe = models.ForeignKey(Cafe, on_delete=models.CASCADE, related_name='categories') # Tenant Scope
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -53,6 +61,7 @@ class Category(models.Model):
 
 class Product(models.Model):
     """Produk yang dijual di cafe"""
+    cafe = models.ForeignKey(Cafe, on_delete=models.CASCADE, related_name='products') # Tenant Scope
     name = models.CharField(max_length=200)
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True, related_name='products')
     description = models.TextField(blank=True, null=True)
@@ -62,13 +71,14 @@ class Product(models.Model):
     image = models.ImageField(upload_to='products/', blank=True, null=True)
     is_available = models.BooleanField(default=True)
     needs_preparation = models.BooleanField(default=True) # True = Masuk KDS, False = Skip KDS (Grab & Go)
-    sku = models.CharField(max_length=50, unique=True, blank=True, null=True)
+    sku = models.CharField(max_length=50, blank=True, null=True) # Removed unique=True temporarily to avoid conflict per tenant
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = "product"
         ordering = ['name']
+        unique_together = [['cafe', 'sku']] # SKU unique per cafe
 
     def save(self, *args, **kwargs):
         # Auto-update status based on stock
@@ -103,7 +113,8 @@ class Transaction(models.Model):
         ('take_away', 'Take Away'),
     ]
 
-    transaction_number = models.CharField(max_length=50, unique=True, editable=False)
+    cafe = models.ForeignKey(Cafe, on_delete=models.CASCADE, related_name='transactions') # Tenant Scope
+    transaction_number = models.CharField(max_length=50, editable=False) # Removed unique=True globally
     cashier = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='transactions')
     customer_name = models.CharField(max_length=100, blank=True, null=True)
     order_type = models.CharField(max_length=20, choices=ORDER_TYPE_CHOICES, default='dine_in')
@@ -127,18 +138,26 @@ class Transaction(models.Model):
     class Meta:
         db_table = "transaction"
         ordering = ['-created_at']
+        unique_together = [['cafe', 'transaction_number']] # Transaction Number unique per cafe
 
     def save(self, *args, **kwargs):
         if not self.transaction_number:
             # Generate nomor transaksi otomatis: TRX-20231225-001
             today = timezone.now().strftime('%Y%m%d')
-            last_transaction = Transaction.objects.filter(
-                transaction_number__startswith=f'TRX-{today}'
-            ).order_by('-transaction_number').first()
+            # Filter by Cafe for numbering continuity per tenant
+            query = Transaction.objects.filter(transaction_number__startswith=f'TRX-{today}')
+            if self.cafe:
+                query = query.filter(cafe=self.cafe)
+                
+            last_transaction = query.order_by('-transaction_number').first()
             
             if last_transaction:
-                last_number = int(last_transaction.transaction_number.split('-')[-1])
-                new_number = last_number + 1
+                # Handle potential suffix parsing if format varies
+                try:
+                    last_number = int(last_transaction.transaction_number.split('-')[-1])
+                    new_number = last_number + 1
+                except ValueError:
+                    new_number = 1
             else:
                 new_number = 1
             
@@ -193,7 +212,7 @@ class Payment(models.Model):
     ]
 
     transaction = models.ForeignKey(Transaction, on_delete=models.CASCADE, related_name='payments')
-    merchant_order_id = models.CharField(max_length=100, unique=True)  # Order ID untuk Duitku
+    merchant_order_id = models.CharField(max_length=100) # Removed unique=True globally, should be unique per tenant/merchant ideally
     reference = models.CharField(max_length=100, blank=True, null=True)  # Reference dari Duitku
     payment_url = models.URLField(blank=True, null=True)  # URL pembayaran QRIS/VA
     va_number = models.CharField(max_length=50, blank=True, null=True)  # Virtual Account number

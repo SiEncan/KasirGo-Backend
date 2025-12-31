@@ -24,3 +24,5 @@ staticfiles/
 .vscode/
 .idea/
 *.swp
+
+DEV_JOURNAL.md
