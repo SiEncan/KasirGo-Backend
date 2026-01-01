@@ -36,28 +36,6 @@ The KasirGo Backend serves as the central nervous system for retail operations. 
 -   **Authentication**: `djangorestframework_simplejwt`
 -   **Deployment**: Vercel (Serverless Config) with `whitenoise` for static files.
 
-## 🗄 Database Schema (Simplified)
-
-```mermaid
-erDiagram
-    USER ||--o{ TRANSACTION : processes
-    TRANSACTION ||--|{ TRANSACTION_ITEM : contains
-    PRODUCT ||--o{ TRANSACTION_ITEM : referenced_in
-    CATEGORY ||--o{ PRODUCT : categorizes
-
-    PRODUCT {
-        string name
-        decimal price
-        int stock
-        string image_url
-    }
-    TRANSACTION {
-        string transaction_no
-        decimal total_amount
-        datetime created_at
-    }
-```
-
 ## 🚀 Deployment (Vercel)
 
  This project is optimized for **Serverless Deployment**.
