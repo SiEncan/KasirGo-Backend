@@ -13,6 +13,7 @@ import uuid
 # Import models & serializers from parent 'api' package
 from api.serializer import CreateUserSerializer
 from api.models import User
+from api.utils.firebase_auth import create_custom_token
 
 class LogoutView(APIView):
   """
@@ -38,6 +39,34 @@ class LogoutView(APIView):
       return Response({"message": "Logout successful"}, status=status.HTTP_205_RESET_CONTENT)
     except (TokenError, InvalidToken) as e:
       return Response({"error": "Invalid token"}, status=status.HTTP_400_BAD_REQUEST)
+
+class FirebaseTokenView(APIView):
+  """
+  Generate Custom Firebase Token for authenticated users.
+  POST /api/auth/firebase-token/
+  """
+
+  def post(self, request):
+    user = request.user
+    print(f"[FirebaseTokenView] Request from User: {user.username} (ID: {user.id})")
+    
+    claims = {
+      'role': user.role,
+      'cafe_id': str(user.cafe.id) if user.cafe else None
+    }
+    print(f"[FirebaseTokenView] Generating token with claims: {claims}")
+    
+    try:
+      token = create_custom_token(user.id, claims)
+      if token:
+        print(f"[FirebaseTokenView] Token generated successfully for {user.username}")
+        return Response({'token': token}, status=status.HTTP_200_OK)
+      else:
+        print(f"[FirebaseTokenView] Token generation FAILED (None returned)")
+        return Response({'error': 'Failed to generate token'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    except Exception as e:
+      print(f"[FirebaseTokenView] EXCEPTION: {e}")
+      return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
       
 @api_view(['GET'])
 def get_all_users(request):

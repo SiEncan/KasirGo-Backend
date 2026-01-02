@@ -4,7 +4,7 @@ from .views import get_all_users, get_update_delete_user, create_user, change_pa
                    get_all_categories, get_update_delete_category, search_products, create_product, get_all_products, \
                    get_update_delete_product, create_transaction, get_update_delete_transaction, \
                    list_transactions, LogoutView, create_payment, payment_callback, get_payment_status, \
-                   cancel_transaction
+                   cancel_transaction, FirebaseTokenView
 
 urlpatterns = [
 
@@ -35,6 +35,7 @@ urlpatterns = [
   path('auth/login/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
   path('auth/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
   path('auth/logout/', LogoutView.as_view(), name='logout'),
+  path('auth/firebase-token/', FirebaseTokenView.as_view(), name='firebase_token'),
 
   # Payment endpoints (Duitku)
   path('payment/create/', create_payment, name='create_payment'),

@@ -1,4 +1,4 @@
-from .auth import LogoutView, get_all_users, create_user, change_password, get_update_delete_user
+from .auth import LogoutView, get_all_users, create_user, change_password, get_update_delete_user, FirebaseTokenView
 from .product import (
     get_all_categories, create_category, get_update_delete_category,
     create_product, search_products, get_all_products, get_update_delete_product
