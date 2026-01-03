@@ -86,10 +86,10 @@ def process_duitku_payment(trx, payment_method):
       payment = Payment.objects.create(
         transaction=trx,
         merchant_order_id=merchant_order_id,
-        reference=response_data.get('reference', ''),
-        payment_url=response_data.get('paymentUrl', ''),
-        va_number=response_data.get('vaNumber', ''),
-        qr_string=response_data.get('qrString', ''),
+        reference=response_data.get('reference') or None,
+        payment_url=response_data.get('paymentUrl') or None,
+        va_number=response_data.get('vaNumber') or None,
+        qr_string=response_data.get('qrString') or None,
         payment_method=payment_method,
         amount=amount,
         status='pending',
@@ -142,9 +142,8 @@ def create_transaction(request):
       except Exception as e:
         transaction.set_rollback(True)
         return Response({
-          'message': 'Payment creation failed. Transaction rolled back.',
-          'error': str(e)
-        }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+          'message': str(e),
+        }, status=status.HTTP_400_BAD_REQUEST)
 
     return Response(response_data, status=status.HTTP_201_CREATED)
   
