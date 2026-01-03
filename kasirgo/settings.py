@@ -37,7 +37,7 @@ if DEBUG:
         'localhost',
         '10.0.2.2',
         '127.0.0.1',
-        '393198a28cf6.ngrok-free.app',
+        '231749bd0245.ngrok-free.app',
     ]
 
 
