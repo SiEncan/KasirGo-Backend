@@ -348,7 +348,11 @@ def payment_callback(request):
       payment.status = 'success'
       payment.paid_at = timezone.now()
       
-      payment.transaction.status = 'completed'
+      # Check if needs kitchen
+      has_kitchen_product = payment.transaction.items.filter(product__needs_preparation=True).exists()
+      new_status = 'processing' if has_kitchen_product else 'completed'
+      
+      payment.transaction.status = new_status
       payment.transaction.save()
     elif result_code == '01':
       payment.status = 'pending'
