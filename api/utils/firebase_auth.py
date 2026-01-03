@@ -1,5 +1,6 @@
 
 import os
+import json
 import firebase_admin
 from firebase_admin import credentials, auth
 from django.conf import settings
@@ -11,7 +12,20 @@ LOG_TAG = "[FirebaseAuth]"
 def initialize_firebase():
   try:
     if not firebase_admin._apps:
-      # Construct path to serviceAccountKey.json
+      # 1. Try Environment Variable (For Vercel)
+      firebase_json = os.getenv('FIREBASE_SERVICE_ACCOUNT')
+      
+      if firebase_json:
+          try:
+              cred_dict = json.loads(firebase_json)
+              cred = credentials.Certificate(cred_dict)
+              firebase_admin.initialize_app(cred)
+              print(f"{LOG_TAG} Initialized successfully using Environment Variable.")
+              return
+          except Exception as e:
+              print(f"{LOG_TAG} Failed to load env var content: {e}")
+
+      # 2. Try Local File
       base_dir = settings.BASE_DIR
       cred_path = os.path.join(base_dir, 'serviceAccountKey.json')
       
@@ -20,7 +34,7 @@ def initialize_firebase():
         firebase_admin.initialize_app(cred)
         print(f"{LOG_TAG} Initialized successfully using {cred_path}")
       else:
-        print(f"{LOG_TAG} Warning: serviceAccountKey.json not found at {cred_path}. Firebase Auth will fail.")
+        print(f"{LOG_TAG} Warning: serviceAccountKey.json not found. Set FIREBASE_SERVICE_ACCOUNT env var or add file.")
   except Exception as e:
     print(f"{LOG_TAG} Initialization error: {str(e)}")
     import traceback
